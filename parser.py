@@ -252,6 +252,12 @@ class LoadMapLine(TextLine):
         '''L\s{date_re}:\sLoading map "(?P<text>.*?)"$'''.format(**patterns)
     )
 
+class StartMapLine(TextDataLine):
+    """Matches map start lines"""
+    matcher = re.compile(
+        '''L\s{date_re}:\sStarted map "(?P<text>.*?)"(?P<data>(?:\s{data_re})*)$'''.format(**patterns)
+    )
+
 class RconLine(DataLine):
     """Matches an rcon command"""
     matcher = re.compile(
@@ -402,6 +408,13 @@ class TeamStatusLine(TeamDataLine):
             "score": values["score"],
             "player_count": values["player_count"]
         }
+
+class TeamFinalLine(TeamStatusLine):
+    """Matches team final score lines"""
+    matcher = re.compile((
+        '''L\s{date_re}:\sTeam "(?P<team>.*?)" final score "(?P<score>\d+)'''
+        '''" with "(?P<player_count>\d+)" players$'''
+    ).format(**patterns))
 
 class CapturePointLine(TeamDataLine):
     """Matches team capture lines"""

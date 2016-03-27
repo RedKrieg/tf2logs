@@ -13,4 +13,3 @@ for filename in os.listdir('serverfiles/tf/logs'):
                     print repr(result)
             else:
                 print line.strip()
-
