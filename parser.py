@@ -407,7 +407,7 @@ class CapturePointLine(TeamDataLine):
     """Matches team capture lines"""
     matcher = re.compile((
         '''L\s{date_re}:\sTeam "(?P<team>.*?)" triggered "pointcaptured"'''
-        '''(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<data>(?:\s{data_re})*)\s*$'''
     ).format(**patterns))
 
 class ItemPickUpLine(TeamTextDataLine):

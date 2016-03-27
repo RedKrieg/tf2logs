@@ -4,6 +4,7 @@ import os
 import parser
 
 for filename in os.listdir('serverfiles/tf/logs'):
+    print filename
     with open('serverfiles/tf/logs/{}'.format(filename)) as f:
         for line in f.readlines():
             result = parser.Line.identify(line)
@@ -13,4 +14,3 @@ for filename in os.listdir('serverfiles/tf/logs'):
             else:
                 print line.strip()
 
-print parser.CapturePointLine.matcher.pattern
