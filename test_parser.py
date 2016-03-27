@@ -12,3 +12,5 @@ for filename in os.listdir('serverfiles/tf/logs'):
                     print repr(result)
             else:
                 print line.strip()
+
+print parser.CapturePointLine.matcher.pattern
