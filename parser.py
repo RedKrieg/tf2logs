@@ -23,6 +23,12 @@ class User(object):
         self.team = user_data["team"]
         self.text = user_text
 
+    def __repr__(self):
+        attrs = self.__dict__
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attrs_str = ", ".join(attr_reprs)
+        return "{}({})".format(self.__class__.__name__, attrs_str)
+
     def __str__(self):
         return "{steam_id} {name} ({team})".format(**self.__dict__)
 
@@ -36,6 +42,12 @@ class Line(object):
         self.matched = result is not None
         if self.matched:
             self.parse(result)
+
+    def __repr__(self):
+        attrs = self.__dict__
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attrs_str = ", ".join(attr_reprs)
+        return "{}({})".format(self.__class__.__name__, attrs_str)
 
     def parse_timestamp(self, year, month, day, hour, minute, second, **kwargs):
         """Parses a timestamp from kwargs.
@@ -53,7 +65,7 @@ class Line(object):
     @classmethod
     def identify(cls, line):
         """Returns an instance of a subclass of Line that matches line, or Line that does not match"""
-        for subclass in cls.find_children():
+        for subclass in set(cls.find_children()):
             result = subclass(line)
             if result.matched:
                 return result
@@ -220,19 +232,13 @@ class TeamNameLine(Line):
         self.team = values["team"]
         self.name = values["name"]
 
-class SayLine(SourceLine):
+class SayLine(SourceTextLine):
     """Matches say lines"""
     matcher = re.compile(
         '''L\s{date_re}:\s(?P<source_user>{user_re})\ssay\s"(?P<text>.*)"$'''.format(
             **patterns
         )
     )
-
-    def parse(self, result):
-        values = result.groupdict()
-        self.parse_timestamp(**values)
-        self.text = values["text"]
-        self.source = User(values["source_user"])
 
 class SayTeamLine(SayLine):
     """Matches say_team lines"""
@@ -485,4 +491,4 @@ with open('match.log') as f:
     for line in f.readlines():
         result = Line.identify(line)
         if result.matched:
-            print type(result)
+            print repr(result)
