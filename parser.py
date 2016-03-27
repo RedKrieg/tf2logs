@@ -93,7 +93,7 @@ def LogEndLine(Line):
 class TournamentModeLine(Line):
     """Matches the beginning of tournament mode"""
     matcher = re.compile(
-        '''L\s{date_re}:\sTournament mode started'''
+        '''L\s{date_re}:\sTournament mode started'''.format(**patterns)
     )
 
     def parse(self, result):
