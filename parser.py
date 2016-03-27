@@ -80,6 +80,16 @@ class LogStartLine(Line):
         self.parse_timestamp(**values)
         self.data = self.parse_values(values["data"])
 
+class TeamNameLine(Line):
+    """Matches team name in tournament mode"""
+    matcher = re.compile('''(?P<team>Red|Blue) Team: (?P<name>.*)''')
+
+    def parse(self, result):
+        values = result.groupdict()
+        self.timestamp = None
+        self.team = values["team"]
+        self.name = values["name"]
+
 class SayLine(Line):
     """Matches say lines"""
     matcher = re.compile(
