@@ -22,6 +22,7 @@ class User(object):
         self.steam_id = user_data["steam_id"]
         self.team = user_data["team"]
         self.text = user_text
+        self.player_class = None
 
     def __repr__(self):
         attrs = self.__dict__
@@ -205,16 +206,22 @@ class LogEndLine(TimeLine):
     )
 
 
-class ServerMessageLine(TimeLine):
+class ServerMessageLine(TextLine):
     """Matches server messages"""
     matcher = re.compile(
         '''L\s{date_re}:\sserver_message: "(?P<text>.*?)"'''.format(**patterns)
     )
 
+class ServerCvarLine(DataLine):
+    """Matches server cvar changes"""
+    matcher = re.compile(
+        '''L\s{date_re}:\sserver_cvar: "(?P<key>.*?)" "(?P<value>.*?)"'''.format(**patterns)
+    )
+
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.text = values["text"]
+        self.data = { values["key"]: values["value"] }
 
 class TournamentModeLine(TimeLine):
     """Matches the beginning of tournament mode"""
@@ -488,10 +495,3 @@ class PlayerDisconnectedLine(SourceDataLine):
         '''L\s{date_re}:\s(?P<source_user>".*?")\sdisconnected'''
         '''(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
-
-with open('match.log') as f:
-    for line in f.readlines():
-        result = Line.identify(line)
-        if result.matched:
-            if '(' in line and not isinstance(result, DataLine) and not isinstance(result, SayLine):
-                print repr(result)
