@@ -83,7 +83,7 @@ class LogStartLine(Line):
 def LogEndLine(Line):
     """Matches end of log"""
     matcher = re.compile(
-        '''L\s{date_re}:\sLog file closed.'''
+        '''L\s{date_re}:\sLog file closed.'''.format(**patterns)
     )
 
     def parse(self, result):
