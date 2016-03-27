@@ -484,5 +484,5 @@ class PlayerDisconnectedLine(SourceTextLine):
 with open('match.log') as f:
     for line in f.readlines():
         result = Line.identify(line)
-        if not result.matched:
-            print line.strip()
+        if result.matched:
+            print type(result)
