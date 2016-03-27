@@ -80,6 +80,26 @@ class LogStartLine(Line):
         self.parse_timestamp(**values)
         self.data = self.parse_values(values["data"])
 
+def LogEndLine(Line):
+    """Matches end of log"""
+    matcher = re.compile(
+        '''L\s{date_re}:\sLog file closed.'''
+    )
+
+    def parse(self, result):
+        values = result.groupdict()
+        self.parse_timestamp(**values)
+
+class TournamentModeLine(Line):
+    """Matches the beginning of tournament mode"""
+    matcher = re.compile(
+        '''L\s{date_re}:\s Tournament mode started'''
+    )
+
+    def parse(self, result):
+        values = result.groupdict()
+        self.parse_timestamp(**values)
+
 class TeamNameLine(Line):
     """Matches team name in tournament mode"""
     matcher = re.compile('''(?P<team>Red|Blue) Team: (?P<name>.*)''')
