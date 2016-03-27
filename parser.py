@@ -459,36 +459,39 @@ class ObjectDetonatedTriggerLine(SourceDataLine):
         '''"object_detonated"(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
-class DominationTriggerLine(SourceTargetLine):
+class DominationTriggerLine(SourceTargetDataLine):
     """Matches domination lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"domination" against (?P<target_user>".*?")'''
+        '''(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
-class RevengeTriggerLine(SourceTargetLine):
+class RevengeTriggerLine(SourceTargetDataLine):
     """Matches revenge lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"revenge" against (?P<target_user>".*?")'''
+        '''(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
-class CaptureBlockedTriggerLine(SourceLine):
+class CaptureBlockedTriggerLine(SourceDataLine):
     """Matches capture point blocked lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"captureblocked"(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
-class PlayerDisconnectedLine(SourceTextLine):
+class PlayerDisconnectedLine(SourceDataLine):
     """Matches player disconnect lines"""
     matcher = re.compile((
-        '''L\s{date_re}:\s(?P<source_user>".*?")\sdisconnected \(reason '''
-        '''"(?P<text>.*?)"\)'''
+        '''L\s{date_re}:\s(?P<source_user>".*?")\sdisconnected'''
+        '''(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
 with open('match.log') as f:
     for line in f.readlines():
         result = Line.identify(line)
         if result.matched:
-            print repr(result)
+            if '(' in line and not isinstance(result, DataLine) and not isinstance(result, SayLine):
+                print repr(result)
