@@ -80,7 +80,7 @@ class LogStartLine(Line):
         self.parse_timestamp(**values)
         self.data = self.parse_values(values["data"])
 
-def LogEndLine(Line):
+class LogEndLine(Line):
     """Matches end of log"""
     matcher = re.compile(
         '''L\s{date_re}:\sLog file closed.'''.format(**patterns)
