@@ -90,6 +90,17 @@ class LogEndLine(Line):
         values = result.groupdict()
         self.parse_timestamp(**values)
 
+class ServerMessageLine(Line):
+    """Matches server messages"""
+    matcher = re.compile(
+        '''L\s{date_re}:\sserver_message: "(?P<text>.*?)"'''.format(**patterns)
+    )
+
+    def parse(self, result):
+        values = result.groupdict()
+        self.parse_timestamp(**values)
+        self.text = values["text"]
+
 class TournamentModeLine(Line):
     """Matches the beginning of tournament mode"""
     matcher = re.compile(
