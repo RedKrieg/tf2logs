@@ -93,7 +93,7 @@ def LogEndLine(Line):
 class TournamentModeLine(Line):
     """Matches the beginning of tournament mode"""
     matcher = re.compile(
-        '''L\s{date_re}:\s Tournament mode started'''
+        '''L\s{date_re}:\sTournament mode started'''
     )
 
     def parse(self, result):
@@ -372,6 +372,22 @@ class PlayerExtinguishedTriggerLine(Line):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"player_extinguished" against (?P<target_user>".*?")'''
+        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)'''
+    ).format(**patterns))
+
+    def parse(self, result):
+        values = result.groupdict()
+        self.parse_timestamp(**values)
+        self.source = User(values["source_user"])
+        self.target = User(values["target_user"])
+        self.weapon = values["weapon"]
+        self.data = self.parse_values(values["data"])
+
+class JarateAttackTriggerLine(Line):
+    """Matches jarate_attack"""
+    matcher = re.compile((
+        '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
+        '''"jarate_attack" against (?P<target_user>".*?")'''
         ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)'''
     ).format(**patterns))
 
