@@ -4,12 +4,13 @@ import os
 import parser
 
 for filename in os.listdir('serverfiles/tf/logs'):
-    print filename
     with open('serverfiles/tf/logs/{}'.format(filename)) as f:
         for line in f.readlines():
             result = parser.Line.identify(line)
             if result.matched:
-                if '(' in line and not isinstance(result, parser.DataLine) and not isinstance(result, parser.SayLine):
+                if isinstance(result, parser.DataLine):
                     print repr(result)
             else:
-                print line.strip()
+                pass
+                #print line.strip()
+

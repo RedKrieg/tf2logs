@@ -9,8 +9,9 @@ patterns = {
                '''<(?P<team>\w*)>"''',
     "date_re": '''(?P<month>\d\d)/(?P<day>\d\d)/(?P<year>\d+)\s'''
                '''-\s(?P<hour>\d\d):(?P<minute>\d\d):(?P<second>\d\d)''',
-    "data_re": '''\((?P<name>\w+)\s"(?P<value>.*?)"\)''',
+    "item_re": '''\((?P<name>\w+)\s"(?P<value>.*?)"\)'''
 }
+patterns["data_re"] = '''(?P<data>(?:\s{item_re})*)\s*$'''.format(**patterns)
 
 class User(object):
     """Represents a User"""
@@ -39,7 +40,6 @@ class Line(object):
 
     def __init__(self, line):
         result = self.matcher.match(line)
-        self.line = line
         self.matched = result is not None
         if self.matched:
             self.parse(result)
@@ -76,9 +76,6 @@ class Line(object):
         """Empty dictionary"""
         self.timestamp = None
         self.data = result.groupdict()
-
-    def parse_values(self, values_string):
-        return dict(re.findall(patterns["data_re"], values_string))
 
 class TimeLine(Line):
     """Lines that have a timestamp"""
@@ -138,6 +135,9 @@ class DataLine(TimeLine):
         values = result.groupdict()
         self.parse_timestamp(**values)
         self.data = self.parse_values(values["data"])
+
+    def parse_values(self, values_string):
+        return dict(re.findall(patterns["item_re"], values_string))
 
 class SourceDataLine(DataLine, SourceLine):
     """Lines with a source and data"""
@@ -211,7 +211,7 @@ class SourceTargetWeaponDataLine(SourceTargetDataLine):
 class LogStartLine(DataLine):
     """Matches start of log"""
     matcher = re.compile(
-        '''L\s{date_re}:\sLog file started(?P<data>(?:\s{data_re})*)$'''.format(
+        '''L\s{date_re}:\sLog file started(?P<data>(?:\s{item_re})*)$'''.format(
             **patterns
         )
     )
@@ -255,7 +255,7 @@ class LoadMapLine(TextLine):
 class StartMapLine(TextDataLine):
     """Matches map start lines"""
     matcher = re.compile(
-        '''L\s{date_re}:\sStarted map "(?P<text>.*?)"(?P<data>(?:\s{data_re})*)$'''.format(**patterns)
+        '''L\s{date_re}:\sStarted map "(?P<text>.*?)"(?P<data>(?:\s{item_re})*)$'''.format(**patterns)
     )
 
 class RconLine(DataLine):
@@ -354,7 +354,7 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
     """Matches when damage is triggered on a player"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered "damage" '''
-        '''against (?P<target_user>".*?")(?P<data>(?:\s{data_re})*)$'''
+        '''against (?P<target_user>".*?")(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class KillLine(SourceTargetWeaponDataLine):
@@ -362,21 +362,21 @@ class KillLine(SourceTargetWeaponDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\skilled\s'''
         '''(?P<target_user>".*?")\swith\s"(?P<weapon>.*?)"'''
-        '''(?P<data>(?:\s{data_re})*)'''
+        '''(?P<data>(?:\s{item_re})*)'''
     ).format(**patterns))
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered "kill assist"'''
-        ''' against (?P<target_user>".*?")(?P<data>(?:\s{data_re})*)$'''
+        ''' against (?P<target_user>".*?")(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class SuicideLine(SourceWeaponDataLine):
     """Matches when a player suicides"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\scommitted suicide with '''
-        '''"(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)$'''
+        '''"(?P<weapon>.*?)"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
     def parse(self, result):
@@ -390,7 +390,7 @@ class WorldTriggerLine(TextDataLine):
     """Matches world triggers"""
     matcher = re.compile((
         '''L\s{date_re}:\sWorld triggered "(?P<text>.*?)"'''
-        '''(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class TeamStatusLine(TeamDataLine):
@@ -420,14 +420,14 @@ class CapturePointLine(TeamDataLine):
     """Matches team capture lines"""
     matcher = re.compile((
         '''L\s{date_re}:\sTeam "(?P<team>.*?)" triggered "pointcaptured"'''
-        '''(?P<data>(?:\s{data_re})*)\s*$'''
+        '''(?P<data>(?:\s{item_re})*)\s*$'''
     ).format(**patterns))
 
 class ItemPickUpLine(TeamTextDataLine):
     """Matches item pickups"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\spicked up item "'''
-        '''(?P<text>.*?)"(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<text>.*?)"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
     def parse(self, result):
@@ -441,63 +441,63 @@ class HealTriggerLine(SourceTargetDataLine):
     """Matches healing lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered "healed" '''
-        '''against (?P<target_user>".*?")(?P<data>(?:\s{data_re})*)$'''
+        '''against (?P<target_user>".*?")(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class ChargeReadyTriggerLine(SourceDataLine):
     """Matches uber deploy lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"chargeready"(?P<data>(?:\s{data_re})*)$'''
+        '''"chargeready"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class ChargeDeployTriggerLine(SourceDataLine):
     """Matches uber deploy lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"chargedeployed"(?P<data>(?:\s{data_re})*)$'''
+        '''"chargedeployed"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class ChargeEndedTriggerLine(SourceDataLine):
     """Matches uber deploy lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"chargeended"(?P<data>(?:\s{data_re})*)$'''
+        '''"chargeended"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class UberEmptyTriggerLine(SourceDataLine):
     """Matches uber empty lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"empty_uber"(?P<data>(?:\s{data_re})*)$'''
+        '''"empty_uber"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class UberAdvantageLostTriggerLine(SourceDataLine):
     """Matches when uber advantage is lost"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"lost_uber_advantage"(?P<data>(?:\s{data_re})*)$'''
+        '''"lost_uber_advantage"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class MedicDeathTrigger(SourceTargetDataLine):
     """Matches when medic deaths are recorded"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"medic_death" against (?P<target_user>".*?")(?P<data>(?:\s{data_re})*)$'''
+        '''"medic_death" against (?P<target_user>".*?")(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class MedicDeathExTrigger(SourceDataLine):
     """Matches when medic deaths are recorded again?"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"medic_death_ex"(?P<data>(?:\s{data_re})*)$'''
+        '''"medic_death_ex"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class FirstHealAfterSpawnTrigger(SourceDataLine):
     """Matches when medic heals after spawning"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"first_heal_after_spawn"(?P<data>(?:\s{data_re})*)$'''
+        '''"first_heal_after_spawn"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class PlayerExtinguishedTriggerLine(SourceTargetWeaponDataLine):
@@ -505,7 +505,7 @@ class PlayerExtinguishedTriggerLine(SourceTargetWeaponDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"player_extinguished" against (?P<target_user>".*?")'''
-        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)$'''
+        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class JarateAttackTriggerLine(SourceTargetWeaponDataLine):
@@ -513,7 +513,7 @@ class JarateAttackTriggerLine(SourceTargetWeaponDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"jarate_attack" against (?P<target_user>".*?")'''
-        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)$'''
+        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class MilkAttackTriggerLine(SourceTargetWeaponDataLine):
@@ -521,14 +521,14 @@ class MilkAttackTriggerLine(SourceTargetWeaponDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"milk_attack" against (?P<target_user>".*?")'''
-        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{data_re})*)$'''
+        ''' with "(?P<weapon>.*?)"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class KillObjectLine(SourceDataLine):
     """Matches 'killedobject' lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"killedobject"(?P<data>(?:\s{data_re})*)$'''
+        '''"killedobject"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class SpawnLine(SourceClassLine):
@@ -542,28 +542,28 @@ class PlayerBuiltObjectTriggerLine(SourceDataLine):
     """Matches building lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"player_builtobject"(?P<data>(?:\s{data_re})*)$'''
+        '''"player_builtobject"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class PlayerCarryObjectTriggerLine(SourceDataLine):
     """Matches player carrying objects"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"player_carryobject"(?P<data>(?:\s{data_re})*)$'''
+        '''"player_carryobject"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class PlayerDropObjectTriggerLine(SourceDataLine):
     """Matches a player dropping an object"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"player_dropobject"(?P<data>(?:\s{data_re})*)$'''
+        '''"player_dropobject"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class ObjectDetonatedTriggerLine(SourceDataLine):
     """Matches a player detonating an object"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"object_detonated"(?P<data>(?:\s{data_re})*)$'''
+        '''"object_detonated"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class DominationTriggerLine(SourceTargetDataLine):
@@ -571,7 +571,7 @@ class DominationTriggerLine(SourceTargetDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"domination" against (?P<target_user>".*?")'''
-        '''(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class RevengeTriggerLine(SourceTargetDataLine):
@@ -579,19 +579,19 @@ class RevengeTriggerLine(SourceTargetDataLine):
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
         '''"revenge" against (?P<target_user>".*?")'''
-        '''(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class CaptureBlockedTriggerLine(SourceDataLine):
     """Matches capture point blocked lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\striggered '''
-        '''"captureblocked"(?P<data>(?:\s{data_re})*)$'''
+        '''"captureblocked"(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
 
 class PlayerDisconnectedLine(SourceDataLine):
     """Matches player disconnect lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s(?P<source_user>".*?")\sdisconnected'''
-        '''(?P<data>(?:\s{data_re})*)$'''
+        '''(?P<data>(?:\s{item_re})*)$'''
     ).format(**patterns))
