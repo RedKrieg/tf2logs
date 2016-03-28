@@ -21,8 +21,13 @@ patterns["data_re"] = '''(?P<data>(?:\s{item_re})*)\s*$'''.format(**patterns)
 class User(object):
     """Represents a User"""
     def __init__(self, user_text):
-        """<user_text> is anything that will match user_re successfully"""
+        """<user_text> is anything that will match user_re successfully.
+        The 'valid' attribute indicates whether or not the constructor
+        was successful."""
         match = re.match(patterns["user_re"], user_text)
+        self.valid = match is not None
+        if not self.valid:
+            return
         user_data = match.groupdict()
         self.name = user_data["username"]
         self.steam_id = user_data["steam_id"]
@@ -142,7 +147,43 @@ class DataLine(TimeLine):
         self.data = self.parse_values(values["data"])
 
     def parse_values(self, values_string):
-        return dict(re.findall(patterns["item_re"], values_string))
+        data = dict(re.findall(patterns["item_re"], values_string))
+        return self.coerce_data(data)
+
+    def coerce_data(self, data):
+        """Attempt to convert strings to more useful types"""
+        coerced_data = {}
+        for key, value in data.iteritems():
+            if type(value) is not str:
+                continue
+            try:
+                coerced_data[key] = int(value)
+                continue
+            except ValueError:
+                pass
+            try:
+                coerced_data[key] = float(value)
+                continue
+            except ValueError:
+                pass
+            try: # some floats have 'f' on the end, "0.5f"
+                if type(value) is str and value.endswith('f'):
+                    coerced_data[key] = float(value[:-1])
+                    continue
+            except ValueError:
+                pass
+            user = User('''"{}"'''.format(value))
+            if user.valid:
+                coerced_data[key] = user
+            coords = value.split()
+            if len(coords) == 3:
+                try:
+                    coerced_data[key] = tuple( int(c) for c in coords )
+                    continue
+                except ValueError:
+                    pass
+        data.update(coerced_data)
+        return data
 
 class SourceDataLine(DataLine, SourceLine):
     """Lines with a source and data"""
@@ -242,7 +283,7 @@ class ServerCvarLine(DataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.data = { values["key"]: values["value"] }
+        self.data = self.coerce_data({ values["key"]: values["value"] })
 
 class ServerCvarSetLine(ServerCvarLine):
     """Matches server cvar changes"""
@@ -271,10 +312,10 @@ class RconLine(DataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.data = {
+        self.data = self.coerce_data({
             "source": values["source"],
             "command": values["command"]
-        }
+        })
 
 class TournamentModeLine(TimeLine):
     """Matches the beginning of tournament mode"""
@@ -408,10 +449,10 @@ class TeamStatusLine(TeamDataLine):
         values = result.groupdict()
         self.parse_timestamp(**values)
         self.team = values["team"]
-        self.data = {
+        self.data = self.coerce_data({
             "score": values["score"],
             "player_count": values["player_count"]
-        }
+        })
 
 class TeamFinalLine(TeamStatusLine):
     """Matches team final score lines"""

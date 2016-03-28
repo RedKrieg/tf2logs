@@ -9,7 +9,9 @@ for filename in os.listdir('serverfiles/tf/logs'):
             result = parser.Line.identify(line)
             if result.matched:
                 if isinstance(result, parser.DataLine):
-                    print repr(result)
+                    for k, v in result.data.iteritems():
+                        if type(v) is str:
+                            print "{:20}: {!r}".format(k, v)
             else:
                 pass
                 #print line.strip()
