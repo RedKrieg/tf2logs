@@ -20,6 +20,7 @@ patterns["data_re"] = '''(?P<data>(?:\s{item_re})*)\s*$'''.format(**patterns)
 
 class User(object):
     """Represents a User"""
+    known_users = {}
     def __init__(self, user_text):
         """<user_text> is anything that will match user_re successfully.
         The 'valid' attribute indicates whether or not the constructor
@@ -32,7 +33,9 @@ class User(object):
         self.name = user_data["username"]
         self.steam_id = user_data["steam_id"]
         self.team = user_data["team"]
+        self.server_id = user_data["server_id"]
         self.player_class = None
+        self.seen = 1
 
     def __repr__(self):
         attrs = self.__dict__
@@ -41,7 +44,23 @@ class User(object):
         return "{}({})".format(self.__class__.__name__, attrs_str)
 
     def __str__(self):
-        return "{steam_id} {name} ({team})".format(**self.__dict__)
+        return "{name}<{server_id}><{steam_id}><{team}>".format(**self.__dict__)
+
+    @classmethod
+    def lookup(cls, user_text):
+        user = cls(user_text)
+        if not user.valid:
+            return user
+        if user.steam_id in cls.known_users:
+            known_user = cls.known_users[user.steam_id]
+            known_user.name = user.name
+            known_user.team = user.team
+            known_user.server_id = user.server_id
+            known_user.seen += 1
+            return known_user
+        else:
+            cls.known_users[user.steam_id] = user
+            return user
 
 class Line(object):
     """Represents a line in the log.  Base class"""
@@ -111,14 +130,14 @@ class SourceLine(TimeLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
 
 class SourceClassLine(SourceLine):
     """Lines with source and class"""
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.source.player_class = values["class"]
 
 class SourceTeamLine(SourceLine, TeamLine):
@@ -126,7 +145,7 @@ class SourceTeamLine(SourceLine, TeamLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.team = values["team"]
         self.source.team = self.team
 
@@ -135,7 +154,7 @@ class SourceTextLine(SourceLine, TextLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.text = values["text"]
 
 class DataLine(TimeLine):
@@ -171,7 +190,7 @@ class DataLine(TimeLine):
                     continue
             except ValueError:
                 pass
-            user = User('''"{}"'''.format(value))
+            user = User.lookup('''"{}"'''.format(value))
             if user.valid:
                 coerced_data[key] = user
             coords = value.split()
@@ -189,7 +208,7 @@ class SourceDataLine(DataLine, SourceLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.data = self.parse_values(values["data"])
 
 class TeamDataLine(TeamLine, DataLine):
@@ -222,7 +241,7 @@ class SourceWeaponDataLine(SourceDataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.weapon = values["weapon"]
         self.data = self.parse_values(values["data"])
 
@@ -231,16 +250,16 @@ class SourceTargetLine(SourceLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
-        self.target = User(values["target_user"])
+        self.source = User.lookup(values["source_user"])
+        self.target = User.lookup(values["target_user"])
 
 class SourceTargetDataLine(SourceTargetLine, SourceDataLine):
     """Lines with sources, targets, and data"""
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
-        self.target = User(values["target_user"])
+        self.source = User.lookup(values["source_user"])
+        self.target = User.lookup(values["target_user"])
         self.data = self.parse_values(values["data"])
 
 class SourceTargetWeaponDataLine(SourceTargetDataLine):
@@ -248,8 +267,8 @@ class SourceTargetWeaponDataLine(SourceTargetDataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
-        self.target = User(values["target_user"])
+        self.source = User.lookup(values["source_user"])
+        self.target = User.lookup(values["target_user"])
         self.weapon = values["weapon"]
         self.data = self.parse_values(values["data"])
 
@@ -426,7 +445,7 @@ class SuicideLine(SourceWeaponDataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.weapon = values["weapon"]
         self.data = self.parse_values(values["data"])
 
@@ -477,7 +496,7 @@ class ItemPickUpLine(TeamTextDataLine):
     def parse(self, result):
         values = result.groupdict()
         self.parse_timestamp(**values)
-        self.source = User(values["source_user"])
+        self.source = User.lookup(values["source_user"])
         self.text = values["text"]
         self.data = self.parse_values(values["data"])
 

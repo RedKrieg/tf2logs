@@ -11,8 +11,10 @@ for filename in os.listdir('serverfiles/tf/logs'):
                 if isinstance(result, parser.DataLine):
                     for k, v in result.data.iteritems():
                         if type(v) is str:
-                            print "{:20}: {!r}".format(k, v)
+                            pass #print "{:20}: {!r}".format(k, v)
+                print repr(result)
             else:
                 pass
                 #print line.strip()
-
+for user in parser.User.known_users.values():
+    print repr(user)
