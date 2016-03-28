@@ -32,7 +32,6 @@ class User(object):
         self.name = user_data["username"]
         self.steam_id = user_data["steam_id"]
         self.team = user_data["team"]
-        self.text = user_text
         self.player_class = None
 
     def __repr__(self):
