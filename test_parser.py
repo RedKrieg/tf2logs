@@ -3,7 +3,7 @@
 import os
 import parser
 
-for filename in os.listdir('serverfiles/tf/logs'):
+for filename in ['l0321006.log']: #os.listdir('serverfiles/tf/logs'):
     world = parser.World()
     with open('serverfiles/tf/logs/{}'.format(filename)) as f:
         for line in f.readlines():
@@ -18,4 +18,17 @@ for filename in os.listdir('serverfiles/tf/logs'):
                 pass
                 #print line.strip()
     for user in world.known_users.values():
-        print repr(user)
+        print user.name
+        for title, counter in user.counters.iteritems():
+            print "    {}".format(title)
+            if hasattr(counter, 'iteritems'):
+                for target, count in counter.iteritems():
+                    target_user = world.get_user_by_steam_id(target)
+                    if not target_user.valid:
+                        target_user = target
+                    print "        {:50}: {}".format(
+                        target_user,
+                        count
+                    )
+            else:
+                print "        {}".format(counter)

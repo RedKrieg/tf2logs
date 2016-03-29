@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import collections
 import datetime
 import re
 
@@ -43,11 +44,16 @@ class World(object):
             known_user.name = user.name
             known_user.team = user.team
             known_user.server_id = user.server_id
-            known_user.seen += 1
+            known_user.counters["seen"] += 1
             return known_user
         else:
             self.known_users[user.steam_id] = user
             return user
+
+    def get_user_by_steam_id(self, steam_id):
+        if steam_id in self.known_users:
+            return self.known_users[steam_id]
+        return User(steam_id) # invalid
 
 class User(object):
     """Represents a User"""
@@ -66,7 +72,7 @@ class User(object):
         self.team = user_data["team"]
         self.server_id = user_data["server_id"]
         self.player_class = None
-        self.seen = 1
+        self.reset_counters()
 
     def __repr__(self):
         attrs = self.__dict__
@@ -76,6 +82,16 @@ class User(object):
 
     def __str__(self):
         return "{name}<{server_id}><{steam_id}><{team}>".format(**self.__dict__)
+
+    def reset_counters(self):
+        self.counters = {
+            "seen": 1,
+            "kills": collections.Counter(),
+            "assists": collections.Counter(),
+            "destructions": collections.Counter(),
+            "damage": collections.Counter(),
+            "realdamage": collections.Counter()
+        }
 
 class Line(object):
     """Represents a line in the log.  Base class.
@@ -365,6 +381,9 @@ class TournamentModeLine(TimeLine):
     matcher = re.compile(
         '''L\s{date_re}:\sTournament mode started$'''.format(**patterns)
     )
+    def update_world(self):
+        for user in self.world.known_users.values():
+            user.reset_counters()
 
 class TeamNameLine(TeamLine):
     """Matches team name in tournament mode"""
@@ -444,6 +463,12 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
         '''L\s{date_re}:\s{source_re}\striggered "damage" '''
         '''against {target_re}{data_re}'''
     ).format(**patterns))
+    def update_world(self):
+        self.source.counters["damage"][self.target.steam_id] += self.data["damage"]
+        if "realdamage" in self.data:
+            self.source.counters["realdamage"][self.target.steam_id] += self.data["realdamage"]
+        else:
+            self.source.counters["realdamage"][self.target.steam_id] += self.data["damage"]
 
 class KillLine(SourceTargetWeaponDataLine):
     """Matches when a player kills another player"""
@@ -452,6 +477,8 @@ class KillLine(SourceTargetWeaponDataLine):
         '''{target_re}\swith\s{weapon_re}'''
         '''{data_re}'''
     ).format(**patterns))
+    def update_world(self):
+        self.source.counters["kills"][self.target.steam_id] += 1
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
@@ -459,6 +486,8 @@ class KillAssistLine(SourceTargetDataLine):
         '''L\s{date_re}:\s{source_re}\striggered "kill assist"'''
         ''' against {target_re}{data_re}'''
     ).format(**patterns))
+    def update_world(self):
+        self.source.counters["assists"][self.target.steam_id] += 1
 
 class SuicideLine(SourceWeaponDataLine):
     """Matches when a player suicides"""
@@ -618,6 +647,8 @@ class KillObjectLine(SourceDataLine):
         '''L\s{date_re}:\s{source_re}\striggered '''
         '''"killedobject"{data_re}'''
     ).format(**patterns))
+    def update_world(self):
+        self.source.counters["destructions"][self.data["object"]] += 1
 
 class SpawnLine(SourceClassLine):
     """Matches 'spawned' lines"""
