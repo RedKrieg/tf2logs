@@ -120,7 +120,9 @@ class User(object):
             "assists": collections.Counter(),
             "destructions": collections.Counter(),
             "damage": collections.Counter(),
+            "damage_by_weapon": collections.Counter(),
             "realdamage": collections.Counter(),
+            "realdamage_by_weapon": collections.Counter(),
             "damage_received": collections.Counter(),
             "deaths": collections.Counter(),
             "heals_given": collections.Counter(),
@@ -130,7 +132,11 @@ class User(object):
             "points_captured": 0,
             "points_blocked": 0,
             "dominations": collections.Counter(),
-            "revenges": collections.Counter()
+            "revenges": collections.Counter(),
+            "headshots": collections.Counter(),
+            "airshots": collections.Counter(),
+            "headshot_kills": collections.Counter(),
+            "backstab_kills": collections.Counter()
         }
 
 class Line(object):
@@ -510,12 +516,19 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
 
     def update_world(self):
         self.source.counters["damage"][self.target] += self.data["damage"]
+        self.source.counters["damage_by_weapon"][self.data["weapon"]] += self.data["damage"]
         if "realdamage" in self.data:
             self.source.counters["realdamage"][self.target] += self.data["realdamage"]
             self.target.counters["damage_received"][self.source] += self.data["realdamage"]
+            self.source.counters["realdamage_by_weapon"][self.data["weapon"]] += self.data["realdamage"]
         else:
             self.source.counters["realdamage"][self.target] += self.data["damage"]
             self.target.counters["damage_received"][self.source] += self.data["damage"]
+            self.source.counters["realdamage_by_weapon"][self.data["weapon"]] += self.data["damage"]
+        if "headshot" in self.data:
+            self.source.counters["headshots"][self.target] += 1
+        if "airshot" in self.data:
+            self.source.counters["airshots"][self.target] += 1
 
 class KillLine(SourceTargetWeaponDataLine):
     """Matches when a player kills another player"""
@@ -530,6 +543,11 @@ class KillLine(SourceTargetWeaponDataLine):
         self.target.counters["deaths"][self.source] += 1
         if self.target.player_class == "Medic":
             self.source.counters["med_picks"][self.target] += 1
+        if "customkill" in self.data:
+            if self.data["customkill"] == "headshot":
+                self.source.counters["headshot_kills"][self.target] += 1
+            elif self.data["customkill"] == "backstab":
+                self.source.counters["backstab_kills"][self.target] += 1
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
