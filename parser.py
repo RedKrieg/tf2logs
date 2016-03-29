@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-
+# -*- coding: UTF-8 -*-
 import collections
 import datetime
 import re
@@ -19,6 +18,18 @@ patterns = {
 }
 patterns["data_re"] = '''(?P<data>(?:\s{item_re})*)\s*$'''.format(**patterns)
 
+class_table = {
+    "Sniper": "⌖",
+    "Spy": "🔪",
+    "Demoman": "💣",
+    "Heavy": "🍫",
+    "Soldier": "🚀",
+    "Engineer": "🔧",
+    "Medic": "✚",
+    "Scout": "👟",
+    "Pyro": "🔥"
+}
+
 class World(object):
     """Represents the game world"""
     def __init__(self):
@@ -26,8 +37,8 @@ class World(object):
         self.filename = ""
         self.mapname = ""
         self.team_names = {
-            "Red": "RED_",
-            "Blue": "BLU_"
+            "Red": "RED",
+            "Blue": "BLU"
         }
 
     def __repr__(self):
@@ -36,7 +47,7 @@ class World(object):
             "mapname": self.mapname,
             "team_names": self.team_names
         }
-        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.items() ]
         attrs_str = ", ".join(attr_reprs)
         return "{}({})".format(self.__class__.__name__, attrs_str)
 
@@ -89,12 +100,18 @@ class User(object):
             "server_id": self.server_id,
             "team": self.team
         }
-        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.items() ]
         attrs_str = ", ".join(attr_reprs)
         return "{}({})".format(self.__class__.__name__, attrs_str)
 
     def __str__(self):
         return "{name}<{server_id}><{steam_id}><{team}>".format(**self.__dict__)
+
+    def __format__(self, format_spec):
+        player_symbol = class_table.get(self.player_class, "?")
+        return "{} - {}".format(
+            player_symbol, self.name
+        ).__format__(format_spec)
 
     def reset_counters(self):
         self.counters = {
@@ -104,9 +121,16 @@ class User(object):
             "destructions": collections.Counter(),
             "damage": collections.Counter(),
             "realdamage": collections.Counter(),
+            "damage_received": collections.Counter(),
             "deaths": collections.Counter(),
             "heals_given": collections.Counter(),
-            "heals_received": collections.Counter()
+            "heals_received": collections.Counter(),
+            "suicides": 0,
+            "med_picks": collections.Counter(),
+            "points_captured": 0,
+            "points_blocked": 0,
+            "dominations": collections.Counter(),
+            "revenges": collections.Counter()
         }
 
 class Line(object):
@@ -125,7 +149,7 @@ class Line(object):
 
     def __repr__(self):
         attrs = self.__dict__
-        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.items() ]
         attrs_str = ", ".join(attr_reprs)
         return "{}({})".format(self.__class__.__name__, attrs_str)
 
@@ -222,7 +246,7 @@ class DataLine(TimeLine):
     def coerce_data(self, data):
         """Attempt to convert strings to more useful types"""
         coerced_data = {}
-        for key, value in data.iteritems():
+        for key, value in data.items():
             if type(value) is not str:
                 continue
             try:
@@ -400,6 +424,7 @@ class TournamentModeLine(TimeLine):
     def update_world(self):
         for user in self.world.known_users.values():
             user.reset_counters()
+        self.world.first_timestamp = self.timestamp
 
 class TeamNameLine(TeamLine):
     """Matches team name in tournament mode"""
@@ -487,8 +512,10 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
         self.source.counters["damage"][self.target] += self.data["damage"]
         if "realdamage" in self.data:
             self.source.counters["realdamage"][self.target] += self.data["realdamage"]
+            self.target.counters["damage_received"][self.source] += self.data["realdamage"]
         else:
             self.source.counters["realdamage"][self.target] += self.data["damage"]
+            self.target.counters["damage_received"][self.source] += self.data["damage"]
 
 class KillLine(SourceTargetWeaponDataLine):
     """Matches when a player kills another player"""
@@ -501,6 +528,8 @@ class KillLine(SourceTargetWeaponDataLine):
     def update_world(self):
         self.source.counters["kills"][self.target] += 1
         self.target.counters["deaths"][self.source] += 1
+        if self.target.player_class == "Medic":
+            self.source.counters["med_picks"][self.target] += 1
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
@@ -527,7 +556,7 @@ class SuicideLine(SourceWeaponDataLine):
         self.data = self.parse_values(values["data"])
 
     def update_world(self):
-        self.source.counters["deaths"][self.source] += 1
+        self.source.counters["suicides"] += 1
 
 class WorldTriggerLine(TextDataLine):
     """Matches world triggers"""
@@ -535,6 +564,9 @@ class WorldTriggerLine(TextDataLine):
         '''L\s{date_re}:\sWorld triggered {text_re}'''
         '''{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        self.world.last_timestamp = self.timestamp
 
 class TeamStatusLine(TeamDataLine):
     """Matches team status lines"""
@@ -565,6 +597,12 @@ class CapturePointLine(TeamDataLine):
         '''L\s{date_re}:\sTeam {team_re} triggered "pointcaptured"'''
         '''{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        for key, value in self.data.items():
+            if not key.startswith("player"):
+                continue
+            value.counters["points_captured"] += 1
 
 class ItemPickUpLine(TeamTextDataLine):
     """Matches item pickups"""
@@ -724,6 +762,9 @@ class DominationTriggerLine(SourceTargetDataLine):
         '''{data_re}'''
     ).format(**patterns))
 
+    def update_world(self):
+        self.source.counters["dominations"][self.target] += 1
+
 class RevengeTriggerLine(SourceTargetDataLine):
     """Matches revenge lines"""
     matcher = re.compile((
@@ -732,12 +773,18 @@ class RevengeTriggerLine(SourceTargetDataLine):
         '''{data_re}'''
     ).format(**patterns))
 
+    def update_world(self):
+        self.source.counters["revenges"][self.target] += 1
+
 class CaptureBlockedTriggerLine(SourceDataLine):
     """Matches capture point blocked lines"""
     matcher = re.compile((
         '''L\s{date_re}:\s{source_re}\striggered '''
         '''"captureblocked"{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        self.source.counters["points_blocked"] += 1
 
 class PlayerDisconnectedLine(SourceDataLine):
     """Matches player disconnect lines"""
