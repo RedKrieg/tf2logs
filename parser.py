@@ -25,11 +25,16 @@ class World(object):
         self.known_users = {}
         self.filename = ""
         self.mapname = ""
+        self.team_names = {
+            "Red": "RED_",
+            "Blue": "BLU_"
+        }
 
     def __repr__(self):
         attrs = {
             "filename": self.filename,
-            "mapname": self.mapname
+            "mapname": self.mapname,
+            "team_names": self.team_names
         }
         attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
         attrs_str = ", ".join(attr_reprs)
@@ -99,7 +104,9 @@ class User(object):
             "destructions": collections.Counter(),
             "damage": collections.Counter(),
             "realdamage": collections.Counter(),
-            "deaths": collections.Counter()
+            "deaths": collections.Counter(),
+            "heals_given": collections.Counter(),
+            "heals_received": collections.Counter()
         }
 
 class Line(object):
@@ -404,6 +411,9 @@ class TeamNameLine(TeamLine):
         self.team = values["team"]
         self.name = values["name"]
 
+    def update_world(self):
+        self.world.team_names[self.team] = self.name
+
 class SayLine(SourceTextLine):
     """Matches say lines"""
     matcher = re.compile(
@@ -472,6 +482,7 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
         '''L\s{date_re}:\s{source_re}\striggered "damage" '''
         '''against {target_re}{data_re}'''
     ).format(**patterns))
+
     def update_world(self):
         self.source.counters["damage"][self.target] += self.data["damage"]
         if "realdamage" in self.data:
@@ -486,6 +497,7 @@ class KillLine(SourceTargetWeaponDataLine):
         '''{target_re}\swith\s{weapon_re}'''
         '''{data_re}'''
     ).format(**patterns))
+
     def update_world(self):
         self.source.counters["kills"][self.target] += 1
         self.target.counters["deaths"][self.source] += 1
@@ -496,6 +508,7 @@ class KillAssistLine(SourceTargetDataLine):
         '''L\s{date_re}:\s{source_re}\striggered "kill assist"'''
         ''' against {target_re}{data_re}'''
     ).format(**patterns))
+
     def update_world(self):
         self.source.counters["assists"][self.target] += 1
 
@@ -512,6 +525,9 @@ class SuicideLine(SourceWeaponDataLine):
         self.source = self.world.user_lookup(values["source_user"])
         self.weapon = values["weapon"]
         self.data = self.parse_values(values["data"])
+
+    def update_world(self):
+        self.source.counters["deaths"][self.source] += 1
 
 class WorldTriggerLine(TextDataLine):
     """Matches world triggers"""
@@ -570,6 +586,10 @@ class HealTriggerLine(SourceTargetDataLine):
         '''L\s{date_re}:\s{source_re}\striggered "healed" '''
         '''against {target_re}{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        self.source.counters["heals_given"][self.target] += self.data["healing"]
+        self.target.counters["heals_received"][self.source] += self.data["healing"]
 
 class ChargeReadyTriggerLine(SourceDataLine):
     """Matches uber deploy lines"""
@@ -657,6 +677,7 @@ class KillObjectLine(SourceDataLine):
         '''L\s{date_re}:\s{source_re}\striggered '''
         '''"killedobject"{data_re}'''
     ).format(**patterns))
+
     def update_world(self):
         self.source.counters["destructions"][self.data["object"]] += 1
 
