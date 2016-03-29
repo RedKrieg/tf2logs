@@ -22,6 +22,17 @@ class World(object):
     """Represents the game world"""
     def __init__(self):
         self.known_users = {}
+        self.filename = ""
+        self.mapname = ""
+
+    def __repr__(self):
+        attrs = {
+            "filename": self.filename,
+            "mapname": self.mapname
+        }
+        attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
+        attrs_str = ", ".join(attr_reprs)
+        return "{}({})".format(self.__class__.__name__, attrs_str)
 
     def user_lookup(self, user_text):
         user = User(user_text)
@@ -77,6 +88,8 @@ class Line(object):
         self.world = world
         if self.matched:
             self.parse(result)
+            if hasattr(self, 'update_world'):
+                self.update_world()
 
     def __repr__(self):
         attrs = self.__dict__
@@ -285,6 +298,8 @@ class LogStartLine(DataLine):
             **patterns
         )
     )
+    def update_world(self):
+        self.world.filename = self.data["file"]
 
 class LogEndLine(TimeLine):
     """Matches end of log"""
@@ -320,12 +335,16 @@ class LoadMapLine(TextLine):
     matcher = re.compile(
         '''L\s{date_re}:\sLoading map {text_re}$'''.format(**patterns)
     )
+    def update_world(self):
+        self.world.mapname = self.text
 
 class StartMapLine(TextDataLine):
     """Matches map start lines"""
     matcher = re.compile(
         '''L\s{date_re}:\sStarted map {text_re}{data_re}'''.format(**patterns)
     )
+    def update_world(self):
+        self.world.mapname = self.text
 
 class RconLine(DataLine):
     """Matches an rcon command"""
