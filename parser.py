@@ -75,7 +75,15 @@ class User(object):
         self.reset_counters()
 
     def __repr__(self):
-        attrs = self.__dict__
+        if not self.valid:
+            return "{}({})".format(self.__class__.__name__, "valid=False")
+        attrs = {
+            "name": self.name,
+            "steam_id": self.steam_id,
+            "player_class": self.player_class,
+            "server_id": self.server_id,
+            "team": self.team
+        }
         attr_reprs = [ "{}={!r}".format(k, v) for k, v in attrs.iteritems() ]
         attrs_str = ", ".join(attr_reprs)
         return "{}({})".format(self.__class__.__name__, attrs_str)
@@ -90,7 +98,8 @@ class User(object):
             "assists": collections.Counter(),
             "destructions": collections.Counter(),
             "damage": collections.Counter(),
-            "realdamage": collections.Counter()
+            "realdamage": collections.Counter(),
+            "deaths": collections.Counter()
         }
 
 class Line(object):
@@ -464,11 +473,11 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
         '''against {target_re}{data_re}'''
     ).format(**patterns))
     def update_world(self):
-        self.source.counters["damage"][self.target.steam_id] += self.data["damage"]
+        self.source.counters["damage"][self.target] += self.data["damage"]
         if "realdamage" in self.data:
-            self.source.counters["realdamage"][self.target.steam_id] += self.data["realdamage"]
+            self.source.counters["realdamage"][self.target] += self.data["realdamage"]
         else:
-            self.source.counters["realdamage"][self.target.steam_id] += self.data["damage"]
+            self.source.counters["realdamage"][self.target] += self.data["damage"]
 
 class KillLine(SourceTargetWeaponDataLine):
     """Matches when a player kills another player"""
@@ -478,7 +487,8 @@ class KillLine(SourceTargetWeaponDataLine):
         '''{data_re}'''
     ).format(**patterns))
     def update_world(self):
-        self.source.counters["kills"][self.target.steam_id] += 1
+        self.source.counters["kills"][self.target] += 1
+        self.target.counters["deaths"][self.source] += 1
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
@@ -487,7 +497,7 @@ class KillAssistLine(SourceTargetDataLine):
         ''' against {target_re}{data_re}'''
     ).format(**patterns))
     def update_world(self):
-        self.source.counters["assists"][self.target.steam_id] += 1
+        self.source.counters["assists"][self.target] += 1
 
 class SuicideLine(SourceWeaponDataLine):
     """Matches when a player suicides"""
