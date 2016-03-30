@@ -69,6 +69,15 @@ class World:
             return self.known_users[steam_id]
         return User(steam_id) # invalid
 
+    def read_log_from_file(self, filename):
+        with open('serverfiles/tf/logs/{}'.format(filename)) as f:
+            for line in f.readlines():
+                result = Line.identify(self, line)
+                if result.matched:
+                    yield result
+                else:
+                    pass # log here
+
 class User:
     """Represents a User"""
     known_users = {}
@@ -113,6 +122,9 @@ class User:
             player_symbol, self.name
         ).__format__(format_spec)
 
+    def team_class(self):
+        return "{original_team} {player_class}".format(**self.__dict__)
+
     def reset_counters(self):
         self.counters = {
             "seen": 1,
@@ -147,6 +159,10 @@ class User:
             self.original_team = other.team
         self.team = other.team
         self.server_id = self.server_id
+
+    def update_class(self, player_class):
+        self.played_classes.add(player_class)
+        self.player_class = player_class
 
 class Line:
     """Represents a line in the log.  Base class.
@@ -228,8 +244,7 @@ class SourceClassLine(SourceLine):
         values = result.groupdict()
         self.parse_timestamp(**values)
         self.source = self.world.user_lookup(values["source_user"])
-        self.source.played_classes.add(values["class"])
-        self.source.player_class = values["class"]
+        self.source.update_class(values["class"])
 
 class SourceTeamLine(SourceLine, TeamLine):
     """Lines with source and team attributes"""
@@ -442,7 +457,7 @@ class TournamentModeLine(TimeLine):
             user.reset_counters()
         self.world.first_timestamp = self.timestamp
 
-class TeamNameLine(TeamLine):
+class TeamNameLine(Line):
     """Matches team name in tournament mode"""
     matcher = re.compile('''(?P<team>Red|Blue) Team: (?P<name>.*)$''')
 
