@@ -30,7 +30,7 @@ class_icons = {
     "Pyro": "🔥"
 }
 
-class World(object):
+class World:
     """Represents the game world"""
     def __init__(self):
         self.known_users = {}
@@ -57,11 +57,7 @@ class World(object):
             return user
         if user.steam_id in self.known_users:
             known_user = self.known_users[user.steam_id]
-            known_user.name = user.name
-            if known_user.original_team not in ('Blue', 'Red'):
-                known_user.original_team = user.team
-            known_user.team = user.team
-            known_user.server_id = user.server_id
+            known_user.update(user)
             known_user.counters["seen"] += 1
             return known_user
         else:
@@ -73,7 +69,7 @@ class World(object):
             return self.known_users[steam_id]
         return User(steam_id) # invalid
 
-class User(object):
+class User:
     """Represents a User"""
     known_users = {}
     def __init__(self, user_text):
@@ -141,10 +137,18 @@ class User(object):
             "headshots": collections.Counter(),
             "airshots": collections.Counter(),
             "headshot_kills": collections.Counter(),
-            "backstab_kills": collections.Counter()
+            "backstab_kills": collections.Counter(),
+            "extinguishes": collections.Counter()
         }
 
-class Line(object):
+    def update(self, other):
+        self.name = other.name
+        if self.original_team not in ('Blue', 'Red'):
+            self.original_team = other.team
+        self.team = other.team
+        self.server_id = self.server_id
+
+class Line:
     """Represents a line in the log.  Base class.
     Constructor requires a World instance and the text line."""
     matcher = re.compile("$") # empty line for base class
@@ -716,6 +720,9 @@ class PlayerExtinguishedTriggerLine(SourceTargetWeaponDataLine):
         '''"player_extinguished" against {target_re}'''
         ''' with {weapon_re}{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        self.source.counters["extinguishes"][self.target] += 1
 
 class JarateAttackTriggerLine(SourceTargetWeaponDataLine):
     """Matches jarate_attack"""
