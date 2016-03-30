@@ -18,7 +18,7 @@ patterns = {
 }
 patterns["data_re"] = '''(?P<data>(?:\s{item_re})*)\s*$'''.format(**patterns)
 
-class_table = {
+class_icons = {
     "Sniper": "⌖",
     "Spy": "🔪",
     "Demoman": "💣",
@@ -58,6 +58,8 @@ class World(object):
         if user.steam_id in self.known_users:
             known_user = self.known_users[user.steam_id]
             known_user.name = user.name
+            if known_user.original_team not in ('Blue', 'Red'):
+                known_user.original_team = user.team
             known_user.team = user.team
             known_user.server_id = user.server_id
             known_user.counters["seen"] += 1
@@ -86,8 +88,10 @@ class User(object):
         self.name = user_data["username"]
         self.steam_id = user_data["steam_id"]
         self.team = user_data["team"]
+        self.original_team = self.team
         self.server_id = user_data["server_id"]
         self.player_class = None
+        self.played_classes = set()
         self.reset_counters()
 
     def __repr__(self):
@@ -108,7 +112,7 @@ class User(object):
         return "{name}<{server_id}><{steam_id}><{team}>".format(**self.__dict__)
 
     def __format__(self, format_spec):
-        player_symbol = class_table.get(self.player_class, "?")
+        player_symbol = class_icons.get(self.player_class, "?")
         return "{} - {}".format(
             player_symbol, self.name
         ).__format__(format_spec)
@@ -118,6 +122,7 @@ class User(object):
             "seen": 1,
             "kills": collections.Counter(),
             "assists": collections.Counter(),
+            "constructions": collections.Counter(),
             "destructions": collections.Counter(),
             "damage": collections.Counter(),
             "damage_by_weapon": collections.Counter(),
@@ -219,6 +224,7 @@ class SourceClassLine(SourceLine):
         values = result.groupdict()
         self.parse_timestamp(**values)
         self.source = self.world.user_lookup(values["source_user"])
+        self.source.played_classes.add(values["class"])
         self.source.player_class = values["class"]
 
 class SourceTeamLine(SourceLine, TeamLine):
@@ -750,6 +756,9 @@ class PlayerBuiltObjectTriggerLine(SourceDataLine):
         '''L\s{date_re}:\s{source_re}\striggered '''
         '''"player_builtobject"{data_re}'''
     ).format(**patterns))
+
+    def update_world(self):
+        self.source.counters["constructions"][self.data["object"]] += 1
 
 class PlayerCarryObjectTriggerLine(SourceDataLine):
     """Matches player carrying objects"""
