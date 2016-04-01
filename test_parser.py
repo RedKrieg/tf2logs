@@ -11,11 +11,11 @@ import parser
 for filename in ['log_1288497.log']: #['l0321006.log']: #os.listdir('serverfiles/tf/logs'):
     world = parser.World()
     tsdata = []
-    for group in itertools.groupby(
+    for ts, group in itertools.groupby(
         world.read_log_from_file(filename),
         key=lambda line: math.floor(
             line.timestamp.timestamp() / 6
-        ) if isinstance(line, parser.TimeLine) else 0
+        ) * 6 if isinstance(line, parser.TimeLine) else 0
     ):
         for line in group:
             if isinstance(line, parser.TournamentModeLine):
@@ -46,4 +46,5 @@ for filename in ['log_1288497.log']: #['l0321006.log']: #os.listdir('serverfiles
         duration = (world.last_timestamp - world.first_timestamp).total_seconds()
         print("    DPM")
         print("        {:.2f}".format(damage / duration * 60.0))
+        print()
     print(json.dumps(tsdata, indent=4))
