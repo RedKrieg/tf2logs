@@ -1,7 +1,9 @@
 # -*- coding: UTF-8 -*-
 import collections
 import datetime
+import functools
 import re
+import timeseries
 
 patterns = {
     "user_re": '''"(?P<username>.*?)<(?P<server_id>\d+)>'''
@@ -58,7 +60,7 @@ class World:
         if user.steam_id in self.known_users:
             known_user = self.known_users[user.steam_id]
             known_user.update(user)
-            known_user.counters["seen"] += 1
+            known_user.counters["seen"][self.timestamp] = 1
             return known_user
         else:
             self.known_users[user.steam_id] = user
@@ -126,32 +128,59 @@ class User:
         return "{original_team} {player_class}".format(**self.__dict__)
 
     def reset_counters(self):
+        # This creates a class constructor for defaultdict where the default
+        # value is an instance of SparseTimeSeries with the resolver kwarg set
+        # to add on duplicate key (aggregator function)
+        multi_counter = functools.partial(
+            collections.defaultdict,
+            functools.partial(
+                timeseries.SparseTimeSeries,
+                aggregator=lambda o, n: o+n
+            )
+        )
+        single_counter = functools.partial(
+            timeseries.SparseTimeSeries,
+            aggregator=lambda o, n: o+n
+        )
         self.counters = {
-            "seen": 1,
-            "kills": collections.Counter(),
-            "assists": collections.Counter(),
-            "constructions": collections.Counter(),
-            "destructions": collections.Counter(),
-            "damage": collections.Counter(),
-            "damage_by_weapon": collections.Counter(),
-            "realdamage": collections.Counter(),
-            "realdamage_by_weapon": collections.Counter(),
-            "damage_received": collections.Counter(),
-            "deaths": collections.Counter(),
-            "heals_given": collections.Counter(),
-            "heals_received": collections.Counter(),
-            "suicides": 0,
-            "med_picks": collections.Counter(),
-            "points_captured": 0,
-            "points_blocked": 0,
-            "dominations": collections.Counter(),
-            "revenges": collections.Counter(),
-            "headshots": collections.Counter(),
-            "airshots": collections.Counter(),
-            "headshot_kills": collections.Counter(),
-            "backstab_kills": collections.Counter(),
-            "extinguishes": collections.Counter()
+            "seen": single_counter(),
+            "kills": multi_counter(),
+            "assists": multi_counter(),
+            "constructions": multi_counter(),
+            "destructions": multi_counter(),
+            "damage": multi_counter(),
+            "damage_by_weapon": multi_counter(),
+            "realdamage": multi_counter(),
+            "realdamage_by_weapon": multi_counter(),
+            "damage_received": multi_counter(),
+            "deaths": multi_counter(),
+            "heals_given": multi_counter(),
+            "heals_received": multi_counter(),
+            "suicides": single_counter(),
+            "med_picks": multi_counter(),
+            "points_captured": single_counter(),
+            "points_blocked": single_counter(),
+            "dominations": multi_counter(),
+            "revenges": multi_counter(),
+            "headshots": multi_counter(),
+            "airshots": multi_counter(),
+            "headshot_kills": multi_counter(),
+            "backstab_kills": multi_counter(),
+            "extinguishes": multi_counter(),
+            "feigns": multi_counter(),
+            "feigns_triggered": multi_counter()
         }
+
+    def set_counter_durations(self, start, end):
+        """Sets the start and end times for each counter"""
+        for value in self.counters.values():
+            if isinstance(value, timeseries.SparseTimeSeries):
+                value.set_start(start)
+                value.set_end(end)
+            elif isinstance(value, dict):
+                for multi_value in value.values():
+                    multi_value.set_start(start)
+                    multi_value.set_end(end)
 
     def update(self, other):
         self.name = other.name
@@ -190,6 +219,7 @@ class Line:
         self.timestamp = datetime.datetime(
             *( int(v) for v in (year, month, day, hour, minute, second) )
         )
+        self.world.timestamp = self.timestamp
 
     @classmethod
     def find_children(cls):
@@ -540,20 +570,20 @@ class DamagePlayerTriggerLine(SourceTargetDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["damage"][self.target] += self.data["damage"]
-        self.source.counters["damage_by_weapon"][self.data["weapon"]] += self.data["damage"]
+        self.source.counters["damage"][self.target][self.timestamp] = self.data["damage"]
+        self.source.counters["damage_by_weapon"][self.data["weapon"]][self.timestamp] = self.data["damage"]
         if "realdamage" in self.data:
-            self.source.counters["realdamage"][self.target] += self.data["realdamage"]
-            self.target.counters["damage_received"][self.source] += self.data["realdamage"]
-            self.source.counters["realdamage_by_weapon"][self.data["weapon"]] += self.data["realdamage"]
+            self.source.counters["realdamage"][self.target][self.timestamp] = self.data["realdamage"]
+            self.target.counters["damage_received"][self.source][self.timestamp] = self.data["realdamage"]
+            self.source.counters["realdamage_by_weapon"][self.data["weapon"]][self.timestamp] = self.data["realdamage"]
         else:
-            self.source.counters["realdamage"][self.target] += self.data["damage"]
-            self.target.counters["damage_received"][self.source] += self.data["damage"]
-            self.source.counters["realdamage_by_weapon"][self.data["weapon"]] += self.data["damage"]
+            self.source.counters["realdamage"][self.target][self.timestamp] = self.data["damage"]
+            self.target.counters["damage_received"][self.source][self.timestamp] = self.data["damage"]
+            self.source.counters["realdamage_by_weapon"][self.data["weapon"]][self.timestamp] = self.data["damage"]
         if "headshot" in self.data:
-            self.source.counters["headshots"][self.target] += 1
+            self.source.counters["headshots"][self.target][self.timestamp] = 1
         if "airshot" in self.data:
-            self.source.counters["airshots"][self.target] += 1
+            self.source.counters["airshots"][self.target][self.timestamp] = 1
 
 class KillLine(SourceTargetWeaponDataLine):
     """Matches when a player kills another player"""
@@ -564,15 +594,19 @@ class KillLine(SourceTargetWeaponDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["kills"][self.target] += 1
-        self.target.counters["deaths"][self.source] += 1
-        if self.target.player_class == "Medic":
-            self.source.counters["med_picks"][self.target] += 1
         if "customkill" in self.data:
+            if self.data["customkill"] == "feign_death":
+                self.source.counters["feigns_triggered"][self.target][self.timestamp] = 1
+                self.target.counters["feigns"][self.source][self.timestamp] = 1
+                return
             if self.data["customkill"] == "headshot":
-                self.source.counters["headshot_kills"][self.target] += 1
+                self.source.counters["headshot_kills"][self.target][self.timestamp] = 1
             elif self.data["customkill"] == "backstab":
-                self.source.counters["backstab_kills"][self.target] += 1
+                self.source.counters["backstab_kills"][self.target][self.timestamp] = 1
+        self.source.counters["kills"][self.target][self.timestamp] = 1
+        self.target.counters["deaths"][self.source][self.timestamp] = 1
+        if self.target.player_class == "Medic":
+            self.source.counters["med_picks"][self.target][self.timestamp] = 1
 
 class KillAssistLine(SourceTargetDataLine):
     """Matches when a player gets a kill assist"""
@@ -582,7 +616,7 @@ class KillAssistLine(SourceTargetDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["assists"][self.target] += 1
+        self.source.counters["assists"][self.target][self.timestamp] = 1
 
 class SuicideLine(SourceWeaponDataLine):
     """Matches when a player suicides"""
@@ -599,7 +633,7 @@ class SuicideLine(SourceWeaponDataLine):
         self.data = self.parse_values(values["data"])
 
     def update_world(self):
-        self.source.counters["suicides"] += 1
+        self.source.counters["suicides"][self.timestamp] = 1
 
 class WorldTriggerLine(TextDataLine):
     """Matches world triggers"""
@@ -645,7 +679,7 @@ class CapturePointLine(TeamDataLine):
         for key, value in self.data.items():
             if not key.startswith("player"):
                 continue
-            value.counters["points_captured"] += 1
+            value.counters["points_captured"][self.timestamp] = 1
 
 class ItemPickUpLine(TeamTextDataLine):
     """Matches item pickups"""
@@ -669,8 +703,8 @@ class HealTriggerLine(SourceTargetDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["heals_given"][self.target] += self.data["healing"]
-        self.target.counters["heals_received"][self.source] += self.data["healing"]
+        self.source.counters["heals_given"][self.target][self.timestamp] = self.data["healing"]
+        self.target.counters["heals_received"][self.source][self.timestamp] = self.data["healing"]
 
 class ChargeReadyTriggerLine(SourceDataLine):
     """Matches uber deploy lines"""
@@ -737,7 +771,7 @@ class PlayerExtinguishedTriggerLine(SourceTargetWeaponDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["extinguishes"][self.target] += 1
+        self.source.counters["extinguishes"][self.target][self.timestamp] = 1
 
 class JarateAttackTriggerLine(SourceTargetWeaponDataLine):
     """Matches jarate_attack"""
@@ -763,7 +797,7 @@ class KillObjectLine(SourceDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["destructions"][self.data["object"]] += 1
+        self.source.counters["destructions"][self.data["object"]][self.timestamp] = 1
 
 class SpawnLine(SourceClassLine):
     """Matches 'spawned' lines"""
@@ -780,7 +814,7 @@ class PlayerBuiltObjectTriggerLine(SourceDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["constructions"][self.data["object"]] += 1
+        self.source.counters["constructions"][self.data["object"]][self.timestamp] = 1
 
 class PlayerCarryObjectTriggerLine(SourceDataLine):
     """Matches player carrying objects"""
@@ -812,7 +846,7 @@ class DominationTriggerLine(SourceTargetDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["dominations"][self.target] += 1
+        self.source.counters["dominations"][self.target][self.timestamp] = 1
 
 class RevengeTriggerLine(SourceTargetDataLine):
     """Matches revenge lines"""
@@ -823,7 +857,7 @@ class RevengeTriggerLine(SourceTargetDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["revenges"][self.target] += 1
+        self.source.counters["revenges"][self.target][self.timestamp] = 1
 
 class CaptureBlockedTriggerLine(SourceDataLine):
     """Matches capture point blocked lines"""
@@ -833,7 +867,7 @@ class CaptureBlockedTriggerLine(SourceDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["points_blocked"] += 1
+        self.source.counters["points_blocked"][self.timestamp] = 1
 
 class PlayerDisconnectedLine(SourceDataLine):
     """Matches player disconnect lines"""

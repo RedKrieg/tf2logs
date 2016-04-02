@@ -4,47 +4,25 @@ from __future__ import print_function
 import collections
 import itertools
 import json
-import math
 import os
 import parser
+import timeseries
 
 for filename in ['log_1288497.log']: #['l0321006.log']: #os.listdir('serverfiles/tf/logs'):
     world = parser.World()
-    tsdata = []
-    for ts, group in itertools.groupby(
-        world.read_log_from_file(filename),
-        key=lambda line: math.floor(
-            line.timestamp.timestamp() / 6
-        ) * 6 if isinstance(line, parser.TimeLine) else 0
-    ):
-        for line in group:
-            if isinstance(line, parser.TournamentModeLine):
-                tsdata = []
-        tsdata.append({
-           user.team_class(): {
-               title: counter if isinstance(counter, int) else {
-                   target.team_class() if isinstance(target, parser.User) else target: count
-                   for target, count in counter.items()
-               }
-               for title, counter in user.counters.items()
-           } for user in world.known_users.values()
-        })
+    parsed = [ line for line in world.read_log_from_file(filename) ]
     for user in world.known_users.values():
+        user.set_counter_durations(world.first_timestamp, world.last_timestamp)
         print("{}".format(user))
         for title, counter in user.counters.items():
-            if hasattr(counter, 'items') and len(counter) > 0:
-                print("    {}".format(title))
-                for target, count in counter.items():
-                    print("        {:50}: {}".format(
-                        target,
-                        count
-                    ))
-            elif not hasattr(counter, 'items'):
-                print("    {}".format(title))
-                print("        {}".format(counter))
-        damage = sum([ damage for target, damage in user.counters["realdamage"].items() ])
+            print("    {}".format(title))
+            if isinstance(counter, timeseries.SparseTimeSeries):
+                print("        {}".format(counter.sum()))
+            else:
+                for target, tscounter in counter.items():
+                    print("        {:50}: {}".format(target, tscounter.sum()))
+        damage = sum([item.sum() for item in [ damage for damage in user.counters["realdamage"].values() ]])
         duration = (world.last_timestamp - world.first_timestamp).total_seconds()
         print("    DPM")
         print("        {:.2f}".format(damage / duration * 60.0))
         print()
-    print(json.dumps(tsdata, indent=4))

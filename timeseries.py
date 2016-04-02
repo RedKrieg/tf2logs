@@ -12,11 +12,11 @@ class SparseTimeSeries:
     key will be converted to the earliest possible datetime within its interval
     before determining uniqueness.  By default, assignment to existing unique
     keys will replace the existing value with the new value.  To override this
-    behavior, pass a function as [resolver] which accepts two inputs, [old]
+    behavior, pass a function as [aggregator] which accepts two inputs, [old]
     and [new].  For example, to add values for an interval, you could use the
     following syntax:
 
-    >>> ts = SparseTimeSeries(resolver=lambda old, new: old + new)
+    >>> ts = SparseTimeSeries(aggregator=lambda old, new: old + new)
     >>> now = datetime.datetime(2016, 4, 1, 17, 3, 44, 18797)
     >>> ts[now] = 1
     >>> ts[now] = 1
@@ -27,7 +27,7 @@ class SparseTimeSeries:
             self,
             interval=1,
             datatype=int,
-            resolver=None,
+            aggregator=None,
             first_timestamp=None,
             last_timestamp=None
         ):
@@ -37,11 +37,11 @@ class SparseTimeSeries:
         if isinstance(interval, int):
             self.interval = interval
         self.datatype = datatype
-        if resolver is None:
-            self.resolver = lambda old, new: new
+        if aggregator is None:
+            self.aggregator = lambda old, new: new
         else:
-            self.resolver = resolver
-        self.values = {}
+            self.aggregator = aggregator
+        self._values = {}
 
     def __len__(self):
         """Returns the length of the time series"""
@@ -56,8 +56,8 @@ class SparseTimeSeries:
         if not isinstance(key, datetime.datetime):
             raise TypeError("Keys must be of type datetime.datetime")
         base_key = self.floor_time(key)
-        if base_key in self.values:
-            return self.values[base_key]
+        if base_key in self._values:
+            return self._values[base_key]
         # if we /should/ know this, return the default constructor
         if self.first_timestamp <= base_key <= self.last_timestamp:
             return self.datatype()
@@ -67,6 +67,10 @@ class SparseTimeSeries:
         """Sets the value at interval [key]"""
         if not isinstance(key, datetime.datetime):
             raise TypeError("Keys must be of type datetime.datetime")
+        if not isinstance(value, self.datatype):
+            raise ValueError("Value {} is not of type {}".format(
+                repr(value), repr(self.datatype)
+            ))
         base_key = self.floor_time(key)
         # track first and last timestamps
         if self.first_timestamp is None:
@@ -78,12 +82,12 @@ class SparseTimeSeries:
         if base_key > self.last_timestamp:
             self.last_timestamp = base_key
         # resolve duplicates
-        if base_key in self.values:
-            self.values[base_key] = self.resolver(
-                self.values[base_key], value
+        if base_key in self._values:
+            self._values[base_key] = self.aggregator(
+                self._values[base_key], value
             )
         else:
-            self.values[base_key] = value
+            self._values[base_key] = value
 
     def __iter__(self):
         """Iterates over keys in our time range"""
@@ -121,13 +125,23 @@ class SparseTimeSeries:
         for ts in self:
             yield ts, self[ts]
 
+    def keys(self):
+        """Iterates over the time period, producing keys of time series"""
+        for ts in self:
+            yield ts
+
+    def values(self):
+        """Iterates over the time period, producing values of time series"""
+        for ts in self:
+            yield self[ts]
+
     def set_start(self, ts):
         """Sets the starting timestamp for the series.
 
         If the current starting timestamp is less than [ts], no effect.
         """
         base_key = self.floor_time(ts)
-        if base_key < self.first_timestamp:
+        if self.first_timestamp is None or base_key < self.first_timestamp:
             self.first_timestamp = base_key
 
     def set_end(self, ts):
@@ -136,5 +150,9 @@ class SparseTimeSeries:
         If the current ending timestamp is greater than [ts], no effect.
         """
         base_key = self.floor_time(ts)
-        if base_key > self.last_timestamp:
+        if self.last_timestamp is None or base_key > self.last_timestamp:
             self.last_timestamp = base_key
+
+    def sum(self):
+        """Returns the sum of all values in the time series"""
+        return sum(self._values.values())
