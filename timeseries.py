@@ -120,3 +120,21 @@ class SparseTimeSeries:
         """Iterates over the time period, producing tuples of time series"""
         for ts in self:
             yield ts, self[ts]
+
+    def set_start(self, ts):
+        """Sets the starting timestamp for the series.
+
+        If the current starting timestamp is less than [ts], no effect.
+        """
+        base_key = self.floor_time(ts)
+        if base_key < self.first_timestamp:
+            self.first_timestamp = base_key
+
+    def set_end(self, ts):
+        """Sets the ending timestamp for the series.
+
+        If the current ending timestamp is greater than [ts], no effect.
+        """
+        base_key = self.floor_time(ts)
+        if base_key > self.last_timestamp:
+            self.last_timestamp = base_key
