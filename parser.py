@@ -83,7 +83,7 @@ class World:
 class User:
     """Represents a User"""
     known_users = {}
-    def __init__(self, user_text):
+    def __init__(self, user_text, interval=10):
         """<user_text> is anything that will match user_re successfully.
         The 'valid' attribute indicates whether or not the constructor
         was successful."""
@@ -99,6 +99,7 @@ class User:
         self.server_id = user_data["server_id"]
         self.player_class = None
         self.played_classes = set()
+        self.interval = interval
         self.reset_counters()
 
     def __repr__(self):
@@ -135,12 +136,14 @@ class User:
             collections.defaultdict,
             functools.partial(
                 timeseries.SparseTimeSeries,
-                aggregator=lambda o, n: o+n
+                aggregator=lambda o, n: o+n,
+                interval=self.interval
             )
         )
         single_counter = functools.partial(
             timeseries.SparseTimeSeries,
-            aggregator=lambda o, n: o+n
+            aggregator=lambda o, n: o+n,
+            interval=self.interval
         )
         self.counters = {
             "seen": single_counter(),

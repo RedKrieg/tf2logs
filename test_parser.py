@@ -26,3 +26,15 @@ for filename in ['log_1288497.log']: #['l0321006.log']: #os.listdir('serverfiles
         print("    DPM")
         print("        {:.2f}".format(damage / duration * 60.0))
         print()
+
+for user in world.known_users.values():
+    with open('data.json', 'w') as f:
+        json.dump([
+            {
+                "key": target.name,
+                "values": [
+                    ( timestamp.timestamp() * 1000, value )
+                    for timestamp, value in tseries.items()
+                ]
+            } for target, tseries in user.counters["realdamage"].items()
+        ], f)
