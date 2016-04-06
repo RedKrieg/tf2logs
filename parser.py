@@ -132,18 +132,14 @@ class User:
         # This creates a class constructor for defaultdict where the default
         # value is an instance of SparseTimeSeries with the resolver kwarg set
         # to add on duplicate key (aggregator function)
-        multi_counter = functools.partial(
-            collections.defaultdict,
-            functools.partial(
-                timeseries.SparseTimeSeries,
-                aggregator=lambda o, n: o+n,
-                interval=self.interval
-            )
-        )
         single_counter = functools.partial(
             timeseries.SparseTimeSeries,
             aggregator=lambda o, n: o+n,
             interval=self.interval
+        )
+        multi_counter = functools.partial(
+            collections.defaultdict,
+            single_counter
         )
         self.counters = {
             "seen": single_counter(),
@@ -173,6 +169,27 @@ class User:
             "feigns": multi_counter(),
             "feigns_triggered": multi_counter()
         }
+
+    def get_counter_totals(self, counter):
+        """Gets the total value timeseries data for [counter].
+
+        All SparseTimeSeries instances must have the same start and end times
+        """
+        my_counter = self.counters[counter]
+        if isinstance(my_counter, timeseries.SparseTimeSeries):
+            return my_counter.items()
+        try:
+            timestamps = next(tseries.keys() for tseries in my_counter.values())
+        except StopIteration:
+            return []
+        values = (
+            sum(v) for v in zip(
+                *[
+                    tseries.values() for tseries in my_counter.values()
+                ]
+            )
+        )
+        return zip(timestamps, values)
 
     def set_counter_durations(self, start, end):
         """Sets the start and end times for each counter"""

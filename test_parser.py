@@ -31,10 +31,10 @@ for user in world.known_users.values():
     with open('data.json', 'w') as f:
         json.dump([
             {
-                "key": target.name,
+                "key": "{}: {}".format(user, stat),
                 "values": [
                     ( timestamp.timestamp() * 1000, value )
-                    for timestamp, value in tseries.items()
+                    for timestamp, value in user.get_counter_totals(stat)
                 ]
-            } for target, tseries in user.counters["realdamage"].items()
-        ], f)
+            } for stat in ("realdamage", "damage_received")
+        ], f, sort_keys=True, indent=4)
