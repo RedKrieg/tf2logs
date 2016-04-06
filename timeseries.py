@@ -8,6 +8,8 @@ class SparseTimeSeries:
     be returned (default int(), or 0).  The value for [interval] must always be
     of type 'int'.
 
+    WARNING: Using keep_last_value=True will result in O(nlog(n)) iteration.
+
     Only objects of type 'datetime.datetime' are considered valid keys.  Every
     key will be converted to the earliest possible datetime within its interval
     before determining uniqueness.  By default, assignment to existing unique
@@ -27,6 +29,7 @@ class SparseTimeSeries:
             self,
             interval=1,
             datatype=int,
+            keep_last_value=False,
             aggregator=None,
             first_timestamp=None,
             last_timestamp=None
@@ -37,6 +40,7 @@ class SparseTimeSeries:
         if isinstance(interval, int):
             self.interval = interval
         self.datatype = datatype
+        self.keep_last_value = keep_last_value
         if aggregator is None:
             self.aggregator = lambda old, new: new
         else:
@@ -58,8 +62,18 @@ class SparseTimeSeries:
         base_key = self.floor_time(key)
         if base_key in self._values:
             return self._values[base_key]
-        # if we /should/ know this, return the default constructor
+        # if we /should/ know this, return the default constructor or the
+        # last value in the sequence (if self.keep_last_value)
         if self.first_timestamp <= base_key <= self.last_timestamp:
+            if self.keep_last_value:
+                last_value = None
+                for ts in self: # use our __iter__
+                    # we already know base_key is not in self._values
+                    if ts in self._values:
+                        last_value = self._values[ts]
+                    elif ts == base_key and last_value is not None:
+                        return last_value
+            # if we fall through to this point, default constructor
             return self.datatype()
         raise KeyError(key)
 

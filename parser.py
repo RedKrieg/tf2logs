@@ -60,7 +60,7 @@ class World:
         if user.steam_id in self.known_users:
             known_user = self.known_users[user.steam_id]
             known_user.update(user)
-            known_user.counters["seen"][self.timestamp] = 1
+            known_user.counters["seen"]["user_lookup"][self.timestamp] = 1
             return known_user
         else:
             self.known_users[user.steam_id] = user
@@ -79,6 +79,105 @@ class World:
                     yield result
                 else:
                     pass # log here
+
+class Counter:
+    """A collection of SparseTimeSeries.
+
+    Keys are generally User objects or strings.
+
+    A 'totals' attribute is used to access timeseries data of totals for each
+    time increment in the child series.  All timeseries must have their start
+    and end times synchronized for defined behavior.
+    """
+    class Totaller:
+        """Implements the 'totals' attribute of a Counter instance
+
+        Totallers use their .values() and .items() functions to yield the
+        totals at each time yielded by their .keys().
+        """
+        def __init__(self, parent):
+            self.parent = parent
+
+        def __iter__(self):
+            # Raises StopIteration if there are no entries
+            timestamps = next(
+                tseries.keys() for tseries in self.parent._values.values()
+            )
+            for ts in timestamps:
+                yield ts
+
+        def values(self):
+            for value_list in zip(
+                *[
+                    tseries.values()
+                    for tseries in self.parent._values.values()
+                ]
+            ):
+                yield sum(value_list)
+
+        def keys(self):
+            for ts in self:
+                yield ts
+
+        def items(self):
+            for ts, value in zip(self.keys(), self.values()):
+                yield ts, value
+
+    def __init__(self, *args, **kwargs):
+        """Initialize the collection.
+
+        Arguments are passed on to each child SparseTimeSeries
+        """
+        self._values = {}
+        self.constructor = functools.partial(
+            timeseries.SparseTimeSeries,
+            *args, **kwargs
+        )
+        self.totals = self.Totaller(self)
+
+    def __getitem__(self, key):
+        if not key in self._values:
+            self._values[key] = self.constructor()
+        return self._values[key]
+
+    def __setitem__(self, key, value):
+        raise TypeError("No assignment to Counter object indexes")
+
+    def __iter__(self):
+        """Iterates over keys in this Counter"""
+        for k in self._values:
+            yield k
+
+    def __contains__(self, key):
+        """Tests whether key is in self"""
+        return key in self._values
+
+    def items(self):
+        for k in self:
+            yield k, self[k]
+
+    def keys(self):
+        for k in self:
+            yield k
+
+    def values(self):
+        for k in self:
+            yield self[k]
+
+class Location:
+    """Represents a location in x, y, z"""
+    def __init__(self, x=0, y=0, z=0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __repr__(self):
+        return "{}(x={}, y={}, z={})".format(
+            self.__class__.__name__,
+            self.x,
+            self.y,
+            self.z
+        )
 
 class User:
     """Represents a User"""
@@ -132,75 +231,53 @@ class User:
         # This creates a class constructor for defaultdict where the default
         # value is an instance of SparseTimeSeries with the resolver kwarg set
         # to add on duplicate key (aggregator function)
-        single_counter = functools.partial(
-            timeseries.SparseTimeSeries,
+        counter_builder = functools.partial(
+            Counter,
             aggregator=lambda o, n: o+n,
             interval=self.interval
         )
-        multi_counter = functools.partial(
-            collections.defaultdict,
-            single_counter
-        )
         self.counters = {
-            "seen": single_counter(),
-            "kills": multi_counter(),
-            "assists": multi_counter(),
-            "constructions": multi_counter(),
-            "destructions": multi_counter(),
-            "damage": multi_counter(),
-            "damage_by_weapon": multi_counter(),
-            "realdamage": multi_counter(),
-            "realdamage_by_weapon": multi_counter(),
-            "damage_received": multi_counter(),
-            "deaths": multi_counter(),
-            "heals_given": multi_counter(),
-            "heals_received": multi_counter(),
-            "suicides": single_counter(),
-            "med_picks": multi_counter(),
-            "points_captured": single_counter(),
-            "points_blocked": single_counter(),
-            "dominations": multi_counter(),
-            "revenges": multi_counter(),
-            "headshots": multi_counter(),
-            "airshots": multi_counter(),
-            "headshot_kills": multi_counter(),
-            "backstab_kills": multi_counter(),
-            "extinguishes": multi_counter(),
-            "feigns": multi_counter(),
-            "feigns_triggered": multi_counter()
+            "seen": counter_builder(),
+            "kills": counter_builder(),
+            "assists": counter_builder(),
+            "constructions": counter_builder(),
+            "destructions": counter_builder(),
+            "damage": counter_builder(),
+            "damage_by_weapon": counter_builder(),
+            "realdamage": counter_builder(),
+            "realdamage_by_weapon": counter_builder(),
+            "damage_received": counter_builder(),
+            "deaths": counter_builder(),
+            "heals_given": counter_builder(),
+            "heals_received": counter_builder(),
+            "suicides": counter_builder(),
+            "med_picks": counter_builder(),
+            "points_captured": counter_builder(),
+            "points_blocked": counter_builder(),
+            "dominations": counter_builder(),
+            "revenges": counter_builder(),
+            "headshots": counter_builder(),
+            "airshots": counter_builder(),
+            "headshot_kills": counter_builder(),
+            "backstab_kills": counter_builder(),
+            "extinguishes": counter_builder(),
+            "feigns": counter_builder(),
+            "feigns_triggered": counter_builder()
         }
-
-    def get_counter_totals(self, counter):
-        """Gets the total value timeseries data for [counter].
-
-        All SparseTimeSeries instances must have the same start and end times
-        """
-        my_counter = self.counters[counter]
-        if isinstance(my_counter, timeseries.SparseTimeSeries):
-            return my_counter.items()
-        try:
-            timestamps = next(tseries.keys() for tseries in my_counter.values())
-        except StopIteration:
-            return []
-        values = (
-            sum(v) for v in zip(
-                *[
-                    tseries.values() for tseries in my_counter.values()
-                ]
-            )
+        self.positions = timeseries.SparseTimeSeries(
+            datatype=Location,
+            interval=self.interval,
+            keep_last_value=True
         )
-        return zip(timestamps, values)
 
     def set_counter_durations(self, start, end):
         """Sets the start and end times for each counter"""
         for value in self.counters.values():
-            if isinstance(value, timeseries.SparseTimeSeries):
-                value.set_start(start)
-                value.set_end(end)
-            elif isinstance(value, dict):
-                for multi_value in value.values():
-                    multi_value.set_start(start)
-                    multi_value.set_end(end)
+            for timeseries in value.values():
+                timeseries.set_start(start)
+                timeseries.set_end(end)
+        self.positions.set_start(start)
+        self.positions.set_end(end)
 
     def update(self, other):
         self.name = other.name
@@ -226,6 +303,8 @@ class Line:
             self.parse(result)
             if hasattr(self, 'update_world'):
                 self.update_world()
+                if hasattr(self, "update_positions"):
+                    self.update_positions()
 
     def __repr__(self):
         attrs = self.__dict__
@@ -349,15 +428,30 @@ class DataLine(TimeLine):
             user = self.world.user_lookup('''"{}"'''.format(value))
             if user.valid:
                 coerced_data[key] = user
+                continue
             coords = value.split()
             if len(coords) == 3:
                 try:
-                    coerced_data[key] = tuple( int(c) for c in coords )
+                    coerced_data[key] = Location(*[int(c) for c in coords])
                     continue
                 except ValueError:
                     pass
         data.update(coerced_data)
         return data
+
+    def update_positions(self):
+        position_regex = re.compile("position(\d+)")
+        for key, value in self.data.items():
+            if key == "attacker_position" or key == "position":
+                self.source.positions[self.timestamp] = value
+            if key == "victim_position":
+                self.target.positions[self.timestamp] = value
+            position_match = position_regex.match(key)
+            if position_match is not None:
+                idx = position_match.group(1)
+                self.data[
+                    "player{}".format(idx)
+                ].positions[self.timestamp] = value
 
 class SourceDataLine(DataLine, SourceLine):
     """Lines with a source and data"""
@@ -653,7 +747,7 @@ class SuicideLine(SourceWeaponDataLine):
         self.data = self.parse_values(values["data"])
 
     def update_world(self):
-        self.source.counters["suicides"][self.timestamp] = 1
+        self.source.counters["suicides"][self.weapon][self.timestamp] = 1
 
 class WorldTriggerLine(TextDataLine):
     """Matches world triggers"""
@@ -699,7 +793,7 @@ class CapturePointLine(TeamDataLine):
         for key, value in self.data.items():
             if not key.startswith("player"):
                 continue
-            value.counters["points_captured"][self.timestamp] = 1
+            value.counters["points_captured"][self.data["cpname"]][self.timestamp] = 1
 
 class ItemPickUpLine(TeamTextDataLine):
     """Matches item pickups"""
@@ -887,7 +981,7 @@ class CaptureBlockedTriggerLine(SourceDataLine):
     ).format(**patterns))
 
     def update_world(self):
-        self.source.counters["points_blocked"][self.timestamp] = 1
+        self.source.counters["points_blocked"][self.data["cpname"]][self.timestamp] = 1
 
 class PlayerDisconnectedLine(SourceDataLine):
     """Matches player disconnect lines"""
