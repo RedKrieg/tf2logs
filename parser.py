@@ -809,6 +809,10 @@ class ItemPickUpLine(TeamTextDataLine):
         self.text = values["text"]
         self.data = self.parse_values(values["data"])
 
+    def update_world(self):
+        if "healing" in self.data:
+            self.source.counters["heals_received"][self.text][self.timestamp] = self.data["healing"]
+
 class HealTriggerLine(SourceTargetDataLine):
     """Matches healing lines"""
     matcher = re.compile((
