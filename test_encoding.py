@@ -23,6 +23,7 @@ class Encoder(json.JSONEncoder):
                 '__id__': id(o),
             }
             result.update(o.repr_json())
+            return result
         return super().default(o)
     def __init__(self, *args, **kwargs):
         self.encoded = {}

@@ -170,3 +170,27 @@ class SparseTimeSeries:
     def sum(self):
         """Returns the sum of all values in the time series"""
         return sum(self._values.values())
+
+    def repr_json(self):
+        return {
+            "first_timestamp": self.first_timestamp,
+            "last_timestamp": self.last_timestamp,
+            "values": self._values,
+            "interval": self.interval,
+            "datatype": self.datatype.__name__,
+            "keep_last_value": self.keep_last_value
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        obj = cls(
+            first_timestamp=data["first_timestamp"],
+            last_timestamp=data["last_timestamp"],
+            interval=data["interval"],
+            keep_last_value=data["keep_last_value"]
+        )
+        obj._values = data["values"]
+        if len(obj._values):
+            first_value = next(obj._values.values())
+            obj.datatype = first_value.__class__
+        return obj
