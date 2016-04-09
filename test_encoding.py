@@ -18,11 +18,11 @@ class Encoder(json.JSONEncoder):
             if self.encoded.get(id(o), False):
                 return {"__backref__": id(o)}
             self.encoded[id(o)] = True
-            return {
+            result = {
                 '__class__': o.__class__.__name__,
                 '__id__': id(o),
-                'data': o.repr_json()
             }
+            result.update(o.repr_json())
         return super().default(o)
     def __init__(self, *args, **kwargs):
         self.encoded = {}
@@ -41,9 +41,8 @@ class Decoder(json.JSONDecoder):
             return self.decoded[d['__backref__']]
         if '__class__' not in d:
             return d
-        _class = self.known_classes[d['__class__']]
-        _id = d['__id__']
-        data = d['data']
-        result = _class.from_json(data)
+        _class = self.known_classes[d.pop('__class__')]
+        _id = d.pop('__id__')
+        result = _class.from_json(d)
         self.decoded[_id] = result
         return result

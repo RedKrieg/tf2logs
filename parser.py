@@ -107,6 +107,12 @@ class Counter:
                 yield ts
 
         def values(self):
+            # self.parent._values.values() yields SparseTimeSeries objects.
+            # A list is made consisting of the values() generator for each of
+            # these SparseTimeSeries.  This list is expanded to the arguments
+            # for the zip() function.  Iterating over this zip() gives tuples
+            # of the child values, which are then summed and yielded as the
+            # .values() generator for the Totaller.
             for value_list in zip(
                 *[
                     tseries.values()
