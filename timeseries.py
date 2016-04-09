@@ -175,7 +175,7 @@ class SparseTimeSeries:
         return {
             "first_timestamp": self.first_timestamp,
             "last_timestamp": self.last_timestamp,
-            "values": self._values,
+            "values": list(self._values.items()),
             "interval": self.interval,
             "datatype": self.datatype.__name__,
             "keep_last_value": self.keep_last_value
@@ -189,8 +189,8 @@ class SparseTimeSeries:
             interval=data["interval"],
             keep_last_value=data["keep_last_value"]
         )
-        obj._values = data["values"]
+        obj._values = dict(data["values"])
         if len(obj._values):
-            first_value = next(obj._values.values())
+            first_value = list(obj._values.values())[0]
             obj.datatype = first_value.__class__
         return obj

@@ -80,6 +80,30 @@ class World:
                 else:
                     pass # log here
 
+    def repr_json(self):
+        return {
+            "known_users": self.known_users,
+            "filename": self.filename,
+            "mapname": self.mapname,
+            "team_names": self.team_names,
+            "timestamp": self.timestamp
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        obj = cls()
+        obj.known_users = data["known_users"]
+        obj.filename = data["filename"]
+        obj.mapname = data["mapname"]
+        obj.team_names = data["team_names"]
+        obj.timestamp = data["timestamp"]
+        obj.reconstitute_user_keys()
+        return obj
+
+    def reconstitute_user_keys(self):
+        for user in self.known_users.values():
+            user.reconstitute_user_keys(self)
+
 class Counter:
     """A collection of SparseTimeSeries.
 
@@ -141,6 +165,32 @@ class Counter:
         )
         self.totals = self.Totaller(self)
 
+    def repr_json(self):
+        repr_values = []
+        for k, v in self._values.items():
+            if isinstance(k, User):
+                k = '''"{}"'''.format(str(k))
+            repr_values.append((k, v))
+        return {
+            "values": repr_values
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        obj = cls()
+        obj._values = dict(data["values"])
+        return obj
+
+    def reconstitute_user_keys(self, world):
+        new_values = {}
+        for key, value in self._values.items():
+            user = world.user_lookup(key)
+            if user.valid:
+                new_values[user] = value
+            else:
+                new_values[key] = value
+        self._values = new_values
+
     def __getitem__(self, key):
         if not key in self._values:
             self._values[key] = self.constructor()
@@ -177,6 +227,17 @@ class Location:
         self.y = y
         self.z = z
 
+    def repr_json(self):
+        return {
+            "x": self.x,
+            "y": self.y,
+            "z": self.z
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        return cls(**data)
+
     def __repr__(self):
         return "{}(x={}, y={}, z={})".format(
             self.__class__.__name__,
@@ -206,6 +267,36 @@ class User:
         self.played_classes = set()
         self.interval = interval
         self.reset_counters()
+
+    def repr_json(self):
+        # we assume self.valid is True
+        return {
+            "name": self.name,
+            "steam_id": self.steam_id,
+            "team": self.team,
+            "original_team": self.original_team,
+            "player_class": self.player_class,
+            "played_classes": list(self.played_classes),
+            "server_id": self.server_id,
+            "interval": self.interval,
+            "counters": self.counters,
+            "positions": self.positions
+        }
+
+    @classmethod
+    def from_json(cls, data):
+        user_text = '''"{name}<{server_id}><{steam_id}><{team}>"'''.format(**data)
+        obj = cls(user_text, data["interval"])
+        obj.original_team = data["original_team"]
+        obj.player_class = data["player_class"]
+        obj.played_classes = set(data["played_classes"])
+        obj.counters = data["counters"]
+        obj.positions = data["positions"]
+        return obj
+
+    def reconstitute_user_keys(self, world):
+        for counter in self.counters.values():
+            counter.reconstitute_user_keys(world)
 
     def __repr__(self):
         if not self.valid:
